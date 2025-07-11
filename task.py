@@ -17,3 +17,4 @@ def connect_db():
     except mysql.connector.Error as err:
         st.error(f"Database connection error: {err}")
         return None
+
