@@ -229,4 +229,3 @@ elif st.session_state.logged_in_user:
                     st.warning("⚠️ Email not sent.")
             else:
                 st.error("❌ Failed to assign task.")
-
