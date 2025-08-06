@@ -90,6 +90,30 @@ def submit_task_to_db(assigned_to, task, priority, deadline, status, closing_dat
         return True
     return False
 
+# def get_active_tasks(username=None):
+#     conn = connect_db()
+#     if conn:
+#         cursor = conn.cursor(dictionary=True)
+#         if username:
+#             cursor.execute("""
+#                 SELECT task, priority, deadline, status 
+#                 FROM daily_tracker_tasks 
+#                 WHERE status IN ('Active', 'Pending', 'In Progress') 
+#                 AND assigned_to = %s
+#                 ORDER BY deadline ASC
+#             """, (username,))
+#         else:
+#             cursor.execute("""
+#                 SELECT task, priority, deadline, status, assigned_to 
+#                 FROM daily_tracker_tasks 
+#                 WHERE status IN ('Active', 'Pending', 'In Progress')
+#                 ORDER BY deadline ASC
+#             """)
+#         tasks = cursor.fetchall()
+#         conn.close()
+#         return tasks
+#     return []
+
 def send_email(recipient_email, subject, body):
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
@@ -176,6 +200,24 @@ elif st.session_state.show_register:
 
     st.markdown("---")
     st.button("Back to Login", on_click=go_to_login)
+
+# # ---------------- Sidebar: Active Tasks ----------------
+# if st.session_state.logged_in_user:
+#     st.sidebar.title("📋 Active Tasks")
+
+#     active_tasks = get_active_tasks(st.session_state.logged_in_user)
+
+#     if active_tasks:
+#         for task in active_tasks:
+#             st.sidebar.markdown(f"""
+#             🔸 **Task:** {task['task'][:30]}...
+#             - ⏳ *Priority:* {task['priority']}
+#             - 📅 *Deadline:* {task['deadline']}
+#             - 📌 *Status:* {task['status']}
+#             """)
+#             st.sidebar.markdown("---")
+#     else:
+#         st.sidebar.info("No active tasks.")
 
 # ---------------- Task Assignment Page ----------------
 elif st.session_state.logged_in_user:
