@@ -94,25 +94,40 @@ def submit_task_to_db(assigned_to, task, priority, deadline, status, closing_dat
         return True
     return False
 
-def get_active_tasks(username=None):
+def get_active_tasks(username=None, status_filter=None):
     conn = connect_db()
     if conn:
         cursor = conn.cursor(dictionary=True)
         if username:
-            cursor.execute("""
-                SELECT id, task, priority, deadline, status, assigned_to 
-                FROM daily_tracker_tasks 
-                WHERE status IN ('Active', 'Pending', 'In Progress') 
-                AND assigned_to = %s
-                ORDER BY deadline ASC
-            """, (username,))
+            if status_filter:
+                cursor.execute("""
+                    SELECT id, task, priority, deadline, status, assigned_to 
+                    FROM daily_tracker_tasks 
+                    WHERE status = %s AND assigned_to = %s
+                    ORDER BY deadline ASC
+                """, (status_filter, username))
+            else:
+                cursor.execute("""
+                    SELECT id, task, priority, deadline, status, assigned_to 
+                    FROM daily_tracker_tasks 
+                    WHERE status IN ('Active', 'Pending', 'In Progress') AND assigned_to = %s
+                    ORDER BY deadline ASC
+                """, (username,))
         else:
-            cursor.execute("""
-                SELECT id, task, priority, deadline, status, assigned_to 
-                FROM daily_tracker_tasks 
-                WHERE status IN ('Active', 'Pending', 'In Progress')
-                ORDER BY deadline ASC
-            """)
+            if status_filter:
+                cursor.execute("""
+                    SELECT id, task, priority, deadline, status, assigned_to 
+                    FROM daily_tracker_tasks 
+                    WHERE status = %s
+                    ORDER BY deadline ASC
+                """, (status_filter,))
+            else:
+                cursor.execute("""
+                    SELECT id, task, priority, deadline, status, assigned_to 
+                    FROM daily_tracker_tasks 
+                    WHERE status IN ('Active', 'Pending', 'In Progress')
+                    ORDER BY deadline ASC
+                """)
         tasks = cursor.fetchall()
         conn.close()
         return tasks
@@ -207,6 +222,8 @@ if 'full_name' not in st.session_state:
     st.session_state.full_name = None
 if 'selected_task_id' not in st.session_state:
     st.session_state.selected_task_id = None
+if 'selected_status_filter' not in st.session_state:    # ✅ Add this line
+    st.session_state.selected_status_filter = None
 
 # ✅ Auto-login using query param
 query_params = st.query_params
@@ -280,20 +297,36 @@ if st.session_state.logged_in_user:
     # ---------- Sidebar: Task Status Summary ----------
     st.sidebar.subheader("📊 Task Status Summary")
 
-    # ✅ Create a connection and cursor safely
+    # ✅ User selection (only once)
+    if st.session_state.user_role == 'admin':
+        user_map = get_all_users()
+        selected_user_name = st.sidebar.selectbox(
+            "👤 View Tasks of User",
+            list(user_map.values()),
+            key="select_user"  # Unique key to avoid duplicate ID error
+        )
+        selected_username = [u for u, n in user_map.items() if n == selected_user_name][0]
+    else:
+        selected_username = st.session_state.logged_in_user
+
+    # ✅ Initialize status filter if not set
+    if "selected_status_filter" not in st.session_state:
+        st.session_state.selected_status_filter = None
+
+    # ✅ Fetch status summary for selected user
     conn = connect_db()
     if conn:
         cursor = conn.cursor()
 
-        # ✅ Use correct table name and column names
         cursor.execute("""
             SELECT status, COUNT(*) AS count 
             FROM daily_tracker_tasks 
+            WHERE assigned_to = %s
             GROUP BY status
-        """)
+        """, (selected_username,))
         status_counts = cursor.fetchall()
 
-        # Optional: Map emojis to status types
+        # ✅ Status emojis
         status_emoji_map = {
             "Active": "🟢",
             "Completed": "✅",
@@ -303,40 +336,40 @@ if st.session_state.logged_in_user:
             "Cancelled": "❌"
         }
 
-        # ✅ Show each status and count in the sidebar
         for status, count in status_counts:
             emoji = status_emoji_map.get(status, "🔹")
-            st.sidebar.markdown(f"{emoji} **{status}:** {count}")
+            if st.sidebar.button(f"{emoji} {status}: {count}", key=f"filter_{status}"):
+                st.session_state.selected_status_filter = status
+
+        # ✅ Clear Filter Button
+        if st.session_state.selected_status_filter:
+            st.sidebar.markdown("---")
+            st.sidebar.button("❌ Clear Filter", on_click=lambda: st.session_state.update({"selected_status_filter": None}))
 
         cursor.close()
         conn.close()
     else:
         st.sidebar.error("Failed to connect to database.")
 
-    # ✅ LOGOUT BUTTON
+    # ✅ Logout
     if st.sidebar.button("🚪 Logout"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.query_params = {}
         st.rerun()
 
-    # Admin filtering
-    if st.session_state.user_role == 'admin':
-        user_map = get_all_users()
-        selected_user_name = st.sidebar.selectbox("👤 View Tasks of User", list(user_map.values()))
-        selected_username = [u for u, n in user_map.items() if n == selected_user_name][0]
-    else:
-        selected_username = st.session_state.logged_in_user
-
-    active_tasks = get_active_tasks(selected_username)
+    # ✅ Show filtered tasks
+    active_tasks = get_active_tasks(selected_username, st.session_state.selected_status_filter)
 
     if active_tasks:
         st.sidebar.markdown("### 🔽 Tasks:")
         for task in active_tasks:
-            if st.sidebar.button(f"🔸 {task['task'][:30]}...", key=f"task_{task['id']}"):
+            label = f"🔸 {task['task'][:30]}..."
+            if st.sidebar.button(label, key=f"task_{task['id']}"):
                 st.session_state.selected_task_id = task['id']
     else:
         st.sidebar.info("No active tasks found.")
+
 
 # ---------------- Main Panel ----------------
 if st.session_state.logged_in_user:
@@ -404,13 +437,22 @@ if st.session_state.logged_in_user:
                 priority = st.selectbox("Priority", ["Low", "Medium", "High", "Critical"])
                 deadline = st.date_input("Deadline", min_value=date.today())
                 status = st.selectbox("Status", ["Active", "Pending", "In Progress", "Completed"])
-                # closing_date = st.date_input("Expected Closing Date", min_value=date.today())
+                # closing_date = st.date_input("Expected Closing Date", min_value=date.today())  # ✅ FIXED: This line is now active
                 remarks = st.text_area("Remarks")
                 submitted = st.form_submit_button("Submit Task")
 
             if submitted:
                 recipient_email = get_email_by_username(assigned_to_username)
-                if submit_task_to_db(assigned_to_username, task, priority, deadline, status, remarks, st.session_state.logged_in_user):
+                if submit_task_to_db(
+                    assigned_to=assigned_to_username,
+                    task=task,
+                    priority=priority,
+                    deadline=deadline,
+                    status=status,
+                    closing_date=None,  # ✅ FIXED: Now passing this to the function
+                    remarks=remarks,
+                    created_by=st.session_state.logged_in_user
+                ):
                     st.success(f"✅ Task assigned to {assigned_to_name}")
                     email_body = f"""
                     <h3>🔔 New Task Assigned</h3>
