@@ -1,5 +1,5 @@
 import streamlit as st
-st.set_page_config(page_title="Daily Task Tracker", layout="wide")  # ✅ FIRST Streamlit command
+st.set_page_config(page_title="Daily Task Tracker", layout="wide")  # FIRST Streamlit command
 
 import mysql.connector
 import smtplib
@@ -222,10 +222,10 @@ if 'full_name' not in st.session_state:
     st.session_state.full_name = None
 if 'selected_task_id' not in st.session_state:
     st.session_state.selected_task_id = None
-if 'selected_status_filter' not in st.session_state:    # ✅ Add this line
+if 'selected_status_filter' not in st.session_state:    # Add this line
     st.session_state.selected_status_filter = None
 
-# ✅ Auto-login using query param
+# Auto-login using query param
 query_params = st.query_params
 if 'user' in query_params and not st.session_state.logged_in_user:
     saved_user = query_params['user'][0]
@@ -247,7 +247,7 @@ def go_to_login():
 
 # ---------------- Login Page ----------------
 if not st.session_state.logged_in_user and not st.session_state.show_register:
-    st.title("📝 Daily Task Tracker")
+    st.title("Daily schedule")
     st.subheader("Login")
 
     username = st.text_input("Username", key="login_user")
@@ -297,11 +297,11 @@ if st.session_state.logged_in_user:
     # ---------- Sidebar: Task Status Summary ----------
     st.sidebar.subheader("📊 Task Status Summary")
 
-    # ✅ User selection (only once)
+    # User selection (only once)
     if st.session_state.user_role == 'admin':
         user_map = get_all_users()
         selected_user_name = st.sidebar.selectbox(
-            "👤 View Tasks of User",
+            "View Tasks of User",
             list(user_map.values()),
             key="select_user"  # Unique key to avoid duplicate ID error
         )
@@ -309,11 +309,11 @@ if st.session_state.logged_in_user:
     else:
         selected_username = st.session_state.logged_in_user
 
-    # ✅ Initialize status filter if not set
+    # Initialize status filter if not set
     if "selected_status_filter" not in st.session_state:
         st.session_state.selected_status_filter = None
 
-    # ✅ Fetch status summary for selected user
+    # Fetch status summary for selected user
     conn = connect_db()
     if conn:
         cursor = conn.cursor()
@@ -326,7 +326,7 @@ if st.session_state.logged_in_user:
         """, (selected_username,))
         status_counts = cursor.fetchall()
 
-        # ✅ Status emojis
+        # Status emojis
         status_emoji_map = {
             "Active": "🟢",
             "Completed": "✅",
@@ -341,7 +341,7 @@ if st.session_state.logged_in_user:
             if st.sidebar.button(f"{emoji} {status}: {count}", key=f"filter_{status}"):
                 st.session_state.selected_status_filter = status
 
-        # ✅ Clear Filter Button
+        # Clear Filter Button
         if st.session_state.selected_status_filter:
             st.sidebar.markdown("---")
             st.sidebar.button("❌ Clear Filter", on_click=lambda: st.session_state.update({"selected_status_filter": None}))
@@ -351,18 +351,18 @@ if st.session_state.logged_in_user:
     else:
         st.sidebar.error("Failed to connect to database.")
 
-    # ✅ Logout
+    # Logout
     if st.sidebar.button("🚪 Logout"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.query_params = {}
         st.rerun()
 
-    # ✅ Show filtered tasks
+    # Show filtered tasks
     active_tasks = get_active_tasks(selected_username, st.session_state.selected_status_filter)
 
     if active_tasks:
-        st.sidebar.markdown("### 🔽 Tasks:")
+        st.sidebar.markdown("### Tasks:")
         for task in active_tasks:
             label = f"🔸 {task['task'][:30]}..."
             if st.sidebar.button(label, key=f"task_{task['id']}"):
@@ -375,40 +375,41 @@ if st.session_state.logged_in_user:
 if st.session_state.logged_in_user:
     if st.session_state.selected_task_id:
         task = get_task_by_id(st.session_state.selected_task_id)
-        st.subheader("📌 Task Details")
+        st.subheader("Task description")
+
         st.markdown(f"""
-        ### 📝 {task['task']}
-        - ⏳ **Priority:** {task['priority']}
-        - 📅 **Deadline:** {task['deadline']}
-        - 🧑 **Assigned To:** {task['assigned_to']}
-        - 🗒️ **Remarks:** {task['remarks'] or 'None'}
+        ### {task['task']}
+        -  **Priority:** {task['priority']}
+        -  **Deadline:** {task['deadline']}
+        -  **Assigned To:** {task['assigned_to']}
+        -  **Remarks:** {task['remarks'] or 'None'}
         """)
 
         if task['assigned_to'] == st.session_state.logged_in_user:
-            st.markdown("### ✏️ Update Status")
+            st.markdown("### Update Status")
             new_status = st.selectbox("Change Status", ["Active", "Pending", "In Progress", "Completed"], index=["Active", "Pending", "In Progress", "Completed"].index(task["status"]))
             if st.button("Update Status"):
                 if update_task_status(task['id'], new_status):
-                    st.success("✅ Status updated.")
+                    st.success("Status updated.")
                     st.rerun()
                 else:
                     st.error("❌ Failed to update status.")
         else:
-            st.markdown(f"- 📌 **Status:** {task['status']}")
+            st.markdown(f"- **Status:** {task['status']}")
 
-        st.markdown("### 💬 Conversation")
+        st.markdown("### Conversation")
         messages = get_task_messages(task['id'])
         for msg in messages:
             st.markdown(f"**{msg['sender']}** [{msg['timestamp']}]: {msg['message']}")
 
-        st.markdown("### ✉️ Send a Message")
+        st.markdown("### Send a Message")
         message_text = st.text_area("Type your message...", key="new_msg")
 
         if st.button("Send Message"):
             if append_message_to_task(task['id'], st.session_state.full_name, message_text):
                 recipient_email = get_email_by_username(task['assigned_to'])
                 email_body = f"""
-                <h3>📝 Task Update</h3>
+                <h3>Task Update</h3>
                 <p><b>Task:</b> {task['task']}</p>
                 <p><b>Message:</b> {message_text}</p>
                 <br><p>Sent by <b>{st.session_state.full_name}</b></p>
@@ -422,7 +423,7 @@ if st.session_state.logged_in_user:
             st.rerun()
 
     else:
-        st.subheader("🔥 FireAI Task Assignment")
+        st.subheader("Task allocation")
 
         user_map = get_all_users()
         assignable_users = {u: n for u, n in user_map.items() if u != st.session_state.logged_in_user}
@@ -449,13 +450,13 @@ if st.session_state.logged_in_user:
                     priority=priority,
                     deadline=deadline,
                     status=status,
-                    closing_date=None,  # ✅ FIXED: Now passing this to the function
+                    closing_date=None,  # FIXED: Now passing this to the function
                     remarks=remarks,
                     created_by=st.session_state.logged_in_user
                 ):
-                    st.success(f"✅ Task assigned to {assigned_to_name}")
+                    st.success(f"Task assigned to {assigned_to_name}")
                     email_body = f"""
-                    <h3>🔔 New Task Assigned</h3>
+                    <h3>New Task Assigned</h3>
                     <p><b>Assigned By:</b> {st.session_state.full_name}</p>
                     <p><b>Task:</b> {task}</p>
                     <p><b>Priority:</b> {priority}</p>
@@ -463,7 +464,7 @@ if st.session_state.logged_in_user:
                     <p><b>Status:</b> {status}</p>
                     <p><b>Remarks:</b> {remarks}</p>
                     """
-                    send_email(recipient_email, f"📝 New Task: {task[:100]}", email_body)
+                    send_email(recipient_email, f"New Task: {task[:100]}", email_body)
                     st.rerun()
                 else:
                     st.error("❌ Failed to assign task.")
